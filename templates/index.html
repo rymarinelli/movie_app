@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Movie Recommendation with FHE</title>
+    <!-- Bootstrap CSS for a modern look -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .movie-card {
+            cursor: pointer;
+            transition: transform 0.2s;
+            border: 1px solid #ddd;
+        }
+        .movie-card:hover {
+            transform: scale(1.03);
+        }
+        .movie-card.selected {
+            border: 3px solid #007bff;
+            background-color: #e9f7ff;
+        }
+    </style>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+</head>
+<body>
+<div class="container">
+    <h1 class="mt-4">Movie Recommendation with FHE</h1>
+    <p>Select the movies you like by clicking on the cards below. The selected movies will be highlighted and used as input for the prediction.</p>
+    
+    <div class="row" id="movieGrid">
+        {% for movie in movies %}
+        <div class="col-md-3 mb-3">
+            <div class="card movie-card" data-index="{{ loop.index0 }}">
+                <div class="card-body">
+                    <h5 class="card-title">{{ movie }}</h5>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="mb-3">
+        <button id="recommendBtn" class="btn btn-primary">Get Recommendation</button>
+        <button id="demoBtn" class="btn btn-secondary">Show Encrypted Demo Data</button>
+    </div>
+    
+    <div id="result" class="mt-4"></div>
+    <div id="demoResult" class="mt-4"></div>
+</div>
+
+<script>
+$(document).ready(function(){
+    // Toggle the "selected" class when a movie card is clicked.
+    $(".movie-card").click(function(){
+        $(this).toggleClass("selected");
+    });
+    
+    // When "Get Recommendation" is clicked:
+    $("#recommendBtn").click(function(){
+        let selection = [];
+        // For each movie card, if it is selected, mark it as 1; otherwise 0.
+        $(".movie-card").each(function(){
+            selection.push($(this).hasClass("selected") ? 1 : 0);
+        });
+        // Check that we have 50 movies.
+        if(selection.length !== 50){
+            alert("There should be 50 movies.");
+            return;
+        }
+        // Send the selection vector to the server.
+        $.ajax({
+            url: "/recommend",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ "selection": selection }),
+            success: function(response) {
+                $("#result").html(
+                    "<div class='alert alert-success'>" +
+                    "<h4>Recommendation:</h4>" +
+                    "<p><strong>Predicted Index:</strong> " + response.prediction + "</p>" +
+                    "<p><strong>Movie:</strong> " + response.recommendation + "</p>" +
+                    "</div>"
+                );
+            },
+            error: function(xhr, status, error) {
+                $("#result").html("<div class='alert alert-danger'>Error: " + (xhr.responseJSON ? xhr.responseJSON.error : error) + "</div>");
+            }
+        });
+    });
+    
+    // When "Show Encrypted Demo Data" is clicked:
+    $("#demoBtn").click(function(){
+        $.ajax({
+            url: "/demo",
+            type: "GET",
+            success: function(response) {
+                $("#demoResult").html(
+                    "<div class='alert alert-info'>" +
+                    "<h4>Encrypted Model Data (Snippet):</h4>" +
+                    "<pre>" + response.encrypted_model_snippet + "</pre>" +
+                    "</div>"
+                );
+            },
+            error: function(xhr, status, error) {
+                $("#demoResult").html("<div class='alert alert-danger'>Error fetching demo data.</div>");
+            }
+        });
+    });
+});
+</script>
+</body>
+</html>

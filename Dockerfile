@@ -1,27 +1,27 @@
-# Dockerfile
 FROM python:3.8-slim
 
-# Install system dependencies required by Concrete ML.
+# Install system dependencies required by pysqlcipher3 (SQLCipher development libraries)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsqlcipher-dev \
     build-essential \
     cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory.
 WORKDIR /app
 
-# Copy requirements and install Python packages.
+# Copy requirements.txt first for caching.
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire project (including code, templates, etc.)
+# Copy the rest of your application code.
 COPY . .
 
-# Run the training script so that fhe_model_concrete.pkl is generated.
+# Run the training script to generate model
 RUN python train_model.py
 
 # Expose the Flask port.
 EXPOSE 5000
 
-# Run the Flask application.
-CMD ["python", "app.py"]
+# Run the Flask application with Waitress.
+CMD ["waitress-serve", "--port=5000", "app:app"]

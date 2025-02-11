@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+from pysqlcipher3 import dbapi2 as sqlite
 import requests
 import zipfile
 import io
@@ -10,34 +11,38 @@ from concrete.ml.common.serialization.loaders import load
 
 app = Flask(__name__)
 
-# --- Ensure movies.csv exists; download if necessary ---
-if not os.path.exists("movies.csv"):
-    app.logger.info("movies.csv not found. Downloading MovieLens dataset...")
-    url = "https://files.grouplens.org/datasets/movielens/ml-latest-small.zip"
-    response = requests.get(url)
-    if response.status_code == 200:
-        with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-            # Extract movies.csv (located at ml-latest-small/movies.csv)
-            z.extract("ml-latest-small/movies.csv", path=".")
-            os.rename("ml-latest-small/movies.csv", "movies.csv")
-        app.logger.info("Downloaded and extracted movies.csv.")
-    else:
-        raise Exception("Failed to download MovieLens dataset.")
+#  encrypted database path and encryption key.
+DB_PATH = "app_encrypted.db"
+ENCRYPTION_KEY = "my_super_secret_key"
 
-# --- Load the first 50 movies ---
-movies_df = pd.read_csv("movies.csv")
-movies_df = movies_df.head(50)
-movie_titles = movies_df["title"].tolist()
+# Connect to the encrypted SQLite database and load movies ---
+conn = sqlite.connect(DB_PATH)
+cursor = conn.cursor()
+cursor.execute("PRAGMA key = '{}';".format(ENCRYPTION_KEY))
+cursor.execute("SELECT title FROM movies ORDER BY id ASC")
+rows = cursor.fetchall()
+movie_titles = [row[0] for row in rows]
+conn.close()
 
-# --- Load the Compiled FHE Model from JSON ---
-# This file is produced by your training script (using model.dump).
-dumped_model_path = Path("logistic_regression_model.json")
-with dumped_model_path.open("r") as f:
-    fhe_model = load(f)
+# Load the Compiled FHE Model from the Encrypted Database
+conn = sqlite.connect(DB_PATH)
+cursor = conn.cursor()
+cursor.execute("PRAGMA key = '{}';".format(ENCRYPTION_KEY))
+cursor.execute("SELECT dump FROM model_dump LIMIT 1")
+row = cursor.fetchone()
+if row is None:
+    raise Exception("No model dump found in the encrypted database.")
+model_dump_json = row[0]
+conn.close()
 
-# --- Recompile the Loaded Model if Needed ---
+# Load the model using Concrete ML's loader.
+import io
+model_dump_io = io.StringIO(model_dump_json)
+fhe_model = load(model_dump_io)
+
+# Recompile the Loaded Model 
 if fhe_model.fhe_circuit is None:
-    # Generate calibration data with shape (1, 50); in practice use representative calibration data.
+    # Selecting a random movie 
     calibration_data = np.random.randint(0, 2, size=(1, 50)).astype(np.float64)
     fhe_model.compile(calibration_data)
     app.logger.info("Recompiled the loaded model with calibration data.")
@@ -50,8 +55,7 @@ def index():
 def recommend():
     """
     Expects a JSON payload:
-      { "selection": [0, 1, 0, 1, ..., 0] }
-    where "selection" is a binary vector of length 50.
+      { "selection": [0, 1, 0, ..., 0] }  (length 50)
     Uses the model's predict method with fhe="execute" to perform FHE inference.
     Returns the recommended movie index and title.
     """
@@ -66,7 +70,6 @@ def recommend():
         return jsonify({"error": "Invalid input", "details": str(e)}), 400
 
     try:
-        # The predict method expects a 2D array.
         prediction = fhe_model.predict([selection], fhe="execute")
     except Exception as e:
         app.logger.exception("Inference error:")
@@ -87,17 +90,21 @@ def recommend():
 @app.route("/demo", methods=["GET"])
 def demo():
     """
-    Returns a snippet of the dumped model file to demonstrate that the model data is stored
-    in an obfuscated/encrypted format.
+    Returns a snippet of the model dump (as stored in the encrypted database)
+    to demonstrate that data at rest is encrypted.
+    Note: The client sees clear text since the decryption happens on the server.
     """
-    dumped_model_path = Path("logistic_regression_model.json")
-    if dumped_model_path.exists():
-        with dumped_model_path.open("r") as f:
-            content = f.read()
-        snippet = content[:500]  # Return the first 500 characters
-        return jsonify({"encrypted_model_snippet": snippet})
-    else:
-        return jsonify({"error": "Model dump file not found"}), 404
+    conn = sqlite.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA key = '{}';".format(ENCRYPTION_KEY))
+    cursor.execute("SELECT dump FROM model_dump LIMIT 1")
+    row = cursor.fetchone()
+    conn.close()
+    if row is None:
+        return jsonify({"error": "Model dump not found"}), 404
+    model_dump_json = row[0]
+    snippet = model_dump_json[:500]
+    return jsonify({"encrypted_model_snippet": snippet})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Movie Recommendation with FHE</title>
-    <!-- Bootstrap CSS for a modern look -->
+    <!-- Bootstrap CSS for modern styling -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         .movie-card {
@@ -25,7 +25,7 @@
 <body>
 <div class="container">
     <h1 class="mt-4">Movie Recommendation with FHE</h1>
-    <p>Select the movies you like by clicking on the cards below. The selected movies will be highlighted and used as input for the prediction.</p>
+    <p>Select the movies you like by clicking on the cards below. Although all data is stored encrypted on the server, you will see clear text in the UI.</p>
     
     <div class="row" id="movieGrid">
         {% for movie in movies %}
@@ -41,7 +41,7 @@
     
     <div class="mb-3">
         <button id="recommendBtn" class="btn btn-primary">Get Recommendation</button>
-        <button id="demoBtn" class="btn btn-secondary">Show Encrypted Demo Data</button>
+        <button id="demoBtn" class="btn btn-secondary">Show Demo Data</button>
     </div>
     
     <div id="result" class="mt-4"></div>
@@ -58,12 +58,11 @@ $(document).ready(function(){
     // When "Get Recommendation" is clicked:
     $("#recommendBtn").click(function(){
         let selection = [];
-        // For each movie card, if it is selected, mark it as 1; otherwise 0.
+        // For each movie card, if selected, mark 1; otherwise 0.
         $(".movie-card").each(function(){
             selection.push($(this).hasClass("selected") ? 1 : 0);
         });
-        // Check that we have 50 movies.
-        if(selection.length !== 50){
+        if (selection.length !== 50) {
             alert("There should be 50 movies.");
             return;
         }
@@ -88,7 +87,7 @@ $(document).ready(function(){
         });
     });
     
-    // When "Show Encrypted Demo Data" is clicked:
+    // When "Show Demo Data" is clicked:
     $("#demoBtn").click(function(){
         $.ajax({
             url: "/demo",

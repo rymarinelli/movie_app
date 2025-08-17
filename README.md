@@ -5,14 +5,6 @@
 
 A simple **Flask web application** that serves movie-related content.\
 The repo also includes deployment files for **Docker** and **Kubernetes**.
-
----
-
-## 📸 Screenshot
-
-\
-*(replace with your own screenshot)*
-
 ---
 
 ## 🚀 Getting Started
